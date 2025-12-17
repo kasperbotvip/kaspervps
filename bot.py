@@ -13,7 +13,7 @@ import telebot
 from telebot import types
 
 # ==================== CONFIGURATION ====================
-BOT_TOKEN = "6977989066:AAGQ42EIrePjhoZbLjer4JSs0vKPkZXFjRoo"
+BOT_TOKEN = "992348406:AAHD77Fah3y5D73o3x3cohG_fNxZGkRFRII"
 DB_FILE = 'users.db'
 CHANNEL_USERNAME = "@day3_00"
 CHANNEL_LINK = f"https://t.me/{CHANNEL_USERNAME[1:]}"

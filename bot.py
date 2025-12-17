@@ -8,7 +8,7 @@ import tempfile
 import os
 import json
 
-TOKEN = "992348406:AAEpUA34VTb4UVrXnKLhPcCOJD5PG-rWwIo"
+TOKEN = "992348406:AAHD77Fah3y5D73o3x3cohG_fNxZGkRFRII"
 CHANNEL_USERNAME = "@day3_00"
 CHANNEL_LINK = f"https://t.me/{CHANNEL_USERNAME[1:]}"
 

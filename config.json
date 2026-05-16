@@ -1,0 +1,52 @@
+{
+    "bot": {
+        "owner_id": 988757303,
+        "api_id": 33002997,
+        "api_hash": "09147832e68829c5388ae4f7dddc88a4",
+        "bot_token": "7024103936:AAGkFARtbl4_De685gHLfyHfFYykJ8EPhvk",
+        "channel_user": "d3dddd",
+        "bot_username": "@kasper_chkbot",
+        "owner_url": "https://t.me/ooo1osold"
+    },
+    "database": {
+        "path": "kasper_data.db"
+    },
+    "gates": {
+        "Kaspper": {
+            "command": "ka",
+            "module": "ka",
+            "type": "auth",
+            "full_name": "Kasper Gateway"
+        },
+        "Test": {
+            "command": "te",
+            "module": "te",
+            "type": "charge",
+            "full_name": "Zoura Auth"
+        },
+        "Br": {
+            "command": "br",
+            "module": "br",
+            "type": "auth",
+            "full_name": "Br Gateway"
+        },
+        "Vi": {
+            "command": "vi",
+            "module": "vi",
+            "type": "charge",
+            "full_name": "Vi Gateway"
+        }
+    },
+    "proxy": {
+        "user": "8i1857hm2b2xipl",
+        "pass": "udgt90kug3p8oo6",
+        "host": "rp.scrapegw.com:6060"
+    },
+    "limits": {
+        "max_gen_amount": 100,
+        "default_gen_amount": 10,
+        "check_delay": 10,
+        "mass_timeout": 60
+    },
+    "temp_folder": "kasper/temp"
+}

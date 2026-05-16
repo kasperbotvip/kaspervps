@@ -519,5 +519,8 @@ async def handle_buttons(client, callback_query):
             await callback_query.answer("No files to delete!")
 
 if __name__ == "__main__":
-    setup_db()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    # كود تشغيل البوت القديم مالتك يجي هنا
     app.run()

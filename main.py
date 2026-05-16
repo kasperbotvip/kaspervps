@@ -1,6 +1,15 @@
+import asyncio
+import threading
+
+# حل مشكلة الـ Event Loop فوراً قبل استدعاء الموديلات الكبيرة
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
 import os
 import re
-import asyncio
 import time
 import warnings
 warnings.filterwarnings("ignore", category=Warning)
@@ -237,16 +246,13 @@ async def checker(client, message):
             break
 
     data = ""
-    # حالة 1: الرد على ملف
     if message.reply_to_message and message.reply_to_message.document:
         temp_path = await message.reply_to_message.download()
         with open(temp_path, "r", encoding="utf-8") as f:
             data = f.read()
         os.remove(temp_path)
-    # حالة 2: الرد على رسالة نصية
     elif message.reply_to_message and message.reply_to_message.text:
         data = message.reply_to_message.text
-    # حالة 3: البطاقات داخل نفس الرسالة
     else:
         args = message.text.split(maxsplit=1)
         data = args[1].strip() if len(args) > 1 else ""
@@ -263,7 +269,6 @@ async def checker(client, message):
     else:
         await process_all_cards(client, message, cards, def_func, message, gate_full_name)
 
-# بقية الأوامر والوظائف (gen, cmds, add, redeem, broadcast, handle_buttons...) تبقى كما هي تماماً
 @app.on_message(filters.command("gen"))
 async def generate_command(client, message):
     if not await is_subscribed(client, message.from_user.id):
@@ -519,8 +524,5 @@ async def handle_buttons(client, callback_query):
             await callback_query.answer("No files to delete!")
 
 if __name__ == "__main__":
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    # كود تشغيل البوت القديم مالتك يجي هنا
+    setup_db()
     app.run()

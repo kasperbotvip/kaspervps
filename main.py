@@ -1,5 +1,6 @@
 import asyncio
 import threading
+import os
 
 # حل مشكلة الـ Event Loop فوراً قبل استدعاء الموديلات الكبيرة
 try:
@@ -8,7 +9,22 @@ except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-import os
+# 🌐 إضافة سيرفر وهمي صغير لخدعة منفذ Render (Port Binding)
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+    def log_message(self, format, *args):
+        return  # كتم سجلات السيرفر الوهمي حتى ما توشوش على لغات البوت
+
+def run_health_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    server.serve_forever()
+
 import re
 import time
 import warnings
@@ -525,4 +541,7 @@ async def handle_buttons(client, callback_query):
 
 if __name__ == "__main__":
     setup_db()
+    # 🚀 تشغيل خادم فحص المنفذ الوهمي في خيط منفصل (Background Thread) لمنع تعليق بايثون
+    threading.Thread(target=run_health_server, daemon=True).start()
+    # 🤖 تشغيل البوت الأساسي مالتك
     app.run()

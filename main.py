@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import os
+import sqlite3
 
 # حل مشكلة الـ Event Loop فوراً قبل استدعاء الموديلات الكبيرة
 try:
@@ -69,6 +70,27 @@ gates = {
 user_cancel_flag = {}
 semaphore = asyncio.Semaphore(10)
 
+# ================= 🛡️ نظام إدارة الـ BINs المصرح بها =================
+def init_allowed_bins_db():
+    conn = sqlite3.connect(config['database']['path'])
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS allowed_bins (
+            bin_code TEXT PRIMARY KEY
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def is_bin_allowed(bin_6):
+    conn = sqlite3.connect(config['database']['path'])
+    cursor = conn.cursor()
+    cursor.execute("SELECT bin_code FROM allowed_bins WHERE bin_code = ?", (bin_6,))
+    row = cursor.fetchone()
+    conn.close()
+    return row is not None
+# ====================================================================
+
 async def send_no_points_msg(message, points):
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("BUY POINTS / VIP", url=OWNER_URL)]])
     await message.reply(
@@ -90,6 +112,15 @@ async def process_card(client, message, cc_line, def_func, results_list, stats, 
             stats['done'] += 1
             return
             
+        bin_6 = cc[:6]
+        # التحقق من السماح للـ BIN (يُستثنى المالك)
+        if user_id != OWNER_ID and not is_bin_allowed(bin_6):
+            stats['error'] += 1
+            stats['done'] += 1
+            results_list.append(f"{cc_line} -> DECLINED (BIN {bin_6} is not allowed by owner)")
+            error_list.append(cc_line)
+            return
+
         start_time = time.time()
         try:
             result, msg = await def_func(cc, mes, ano, cvv, PROXY_CONFIG)
@@ -101,7 +132,7 @@ async def process_card(client, message, cc_line, def_func, results_list, stats, 
                 
             if "Approved" in result:
                 stats['live'] += 1
-                country, details = await get_bin_info(cc[:6])
+                country, details = await get_bin_info(bin_6)
                 hit_msg = (
                     f"<b>NEW HIT! | {gate_full_name}</b>\n"
                     f"<code>━━━━━━━━━━━━━━━━━━━━━━━━</code>\n"
@@ -109,7 +140,7 @@ async def process_card(client, message, cc_line, def_func, results_list, stats, 
                     f"<b>STATUS: {result}</b>\n"
                     f"<b>RESPONSE: {msg}</b>\n"
                     f"<code>━━━━━━━━━━━━━━━━━━━━━━━━</code>\n"
-                    f"<b>BIN:</b> <code>{cc[:6]}</code> - <b>{country}</b>\n"
+                    f"<b>BIN:</b> <code>{bin_6}</code> - <b>{country}</b>\n"
                     f"<b>INFO:</b> <code>{details}</code>\n"
                     f"<b>TIME:</b> <b>({taken_time}s)</b>\n"
                     f"<code>━━━━━━━━━━━━━━━━━━━━━━━━</code>\n"
@@ -207,13 +238,20 @@ async def single_check(client, message, cc_line, def_func, gate_full_name):
     except:
         return await message.reply("<b>Format Error! Use CC|MM|YYYY|CVV</b>")
         
+    bin_6 = cc[:6]
+    user_id = message.from_user.id
+    
+    # فحص الحظر للـ BIN الفردي (باستثناء المالك)
+    if user_id != OWNER_ID and not is_bin_allowed(bin_6):
+        return await message.reply(f"<b>❌ هذا الـ BIN محظور ($<code>{bin_6}</code>). غير مسموح بالاستخدام إلا بتصريح من المالك.</b>")
+
     wait = await message.reply(f"<b>Checking {cc_line}...</b>", quote=True)
     start_time = time.time()
-    ci, d = await get_bin_info(cc[:6])
+    ci, d = await get_bin_info(bin_6)
     res, msg = await def_func(cc, mes, ano, cvv, PROXY_CONFIG)
     if "Approved" in res or "Declined" in res:
-        deduct_point(message.from_user.id)
-    _, _, u_pts = check_vip(message.from_user.id)
+        deduct_point(user_id)
+    _, _, u_pts = check_vip(user_id)
     taken = round(time.time() - start_time, 1)
     await wait.edit_text(
         f"<b>CC:</b> <code>{cc_line}</code>\n"
@@ -221,12 +259,50 @@ async def single_check(client, message, cc_line, def_func, gate_full_name):
         f"<b>GATE: {gate_full_name}</b>\n"
         f"<b>RESPONSE: {msg}</b>\n\n"
         f"<b>BIN DETAILS</b>\n"
-        f"<b>❖BIN:</b> <code>{cc[:6]}</code> - <b>{ci}</b>\n"
+        f"<b>❖BIN:</b> <code>{bin_6}</code> - <b>{ci}</b>\n"
         f"<b>❖DETAILS:</b> <code>{d}</code>\n"
         f"<b>❖TIME:</b> <b>({taken}s)</b>\n\n"
-        f"<b>POINTS REMAINING: {u_pts if message.from_user.id != OWNER_ID else 'INF'}</b>\n"
+        f"<b>POINTS REMAINING: {u_pts if user_id != OWNER_ID else 'INF'}</b>\n"
         f"<b>CHECKED BY {message.from_user.first_name} [VIP]</b>"
     )
+
+# ================= ⚙️ أوامر التحكم بالـ BINs (خاصة بالمالك) =================
+@app.on_message(filters.command("allowbin") & filters.user(OWNER_ID))
+async def allow_bin_cmd(client, message):
+    args = message.text.split()
+    if len(args) < 2:
+        return await message.reply("<b>Usage: <code>/allowbin [6 أرقام للـ BIN]</code></b>")
+    
+    bin_code = args[1].strip()
+    if not bin_code.isdigit() or len(bin_code) < 6:
+        return await message.reply("<b>Error: يرجى كتابة أول 6 أرقام صحيحة للـ BIN.</b>")
+    
+    bin_6 = bin_code[:6]
+    conn = sqlite3.connect(config['database']['path'])
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT OR IGNORE INTO allowed_bins (bin_code) VALUES (?)", (bin_6,))
+        conn.commit()
+        await message.reply(f"<b>✅ تم السماح للـ BIN بنجاح:\n<code>{bin_6}</code></b>")
+    except Exception as e:
+        await message.reply(f"<b>حدث خطأ: {e}</b>")
+    finally:
+        conn.close()
+
+@app.on_message(filters.command("removebin") & filters.user(OWNER_ID))
+async def remove_bin_cmd(client, message):
+    args = message.text.split()
+    if len(args) < 2:
+        return await message.reply("<b>Usage: <code>/removebin [6 أرقام للـ BIN المراد حظره]</code></b>")
+    
+    bin_code = args[1].strip()[:6]
+    conn = sqlite3.connect(config['database']['path'])
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM allowed_bins WHERE bin_code = ?", (bin_6 := bin_code,))
+    conn.commit()
+    conn.close()
+    await message.reply(f"<b>🚫 تم إلغاء التصريح وحظر الـ BIN:\n<code>{bin_6}</code></b>")
+# =========================================================================
 
 @app.on_message(filters.command("start"))
 async def start_cmd(client, message):
@@ -359,7 +435,6 @@ async def add_points_direct(client, message):
 @app.on_message(filters.command("mcode") & filters.user(OWNER_ID))
 async def make_code(client, message):
     full_code = f"KASPER-{secrets.token_hex(3).upper()}"
-    import sqlite3
     conn = sqlite3.connect(config['database']['path'])
     cursor = conn.cursor()
     cursor.execute("INSERT INTO codes (code, days, points) VALUES (?, ?, ?)", (full_code, 30, 1000))
@@ -377,7 +452,6 @@ async def redeem_code(client, message):
         return await message.reply("<b>USAGE: /redeem KASPER-XXXX</b>")
     code = args[1].strip()
     
-    import sqlite3
     conn = sqlite3.connect(config['database']['path'])
     cursor = conn.cursor()
     cursor.execute("SELECT days, points FROM codes WHERE code = ?", (code,))
@@ -403,7 +477,6 @@ async def broadcast_handler(client, message):
         return await message.reply("<b>Reply to a message (text/photo/video) to broadcast it.</b>")
     
     status_msg = await message.reply("<b>Broadcasting in progress...</b>")
-    import sqlite3
     conn = sqlite3.connect(config['database']['path'])
     cursor = conn.cursor()
     cursor.execute("SELECT user_id FROM users")
@@ -434,7 +507,6 @@ async def handle_buttons(client, callback_query):
         return await callback_query.answer("You must subscribe to the channel first!", show_alert=True)
     
     if data == "activate_trial":
-        import sqlite3
         conn = sqlite3.connect(config['database']['path'])
         cursor = conn.cursor()
         cursor.execute("SELECT user_id FROM trial_users WHERE user_id = ?", (user_id,))
@@ -541,6 +613,7 @@ async def handle_buttons(client, callback_query):
 
 if __name__ == "__main__":
     setup_db()
+    init_allowed_bins_db()  # تهيئة جدول الـ BINs المسموحة
     # 🚀 تشغيل خادم فحص المنفذ الوهمي في خيط منفصل (Background Thread) لمنع تعليق بايثون
     threading.Thread(target=run_health_server, daemon=True).start()
     # 🤖 تشغيل البوت الأساسي مالتك

